@@ -1,0 +1,387 @@
+*Terraform-
+
+*Steps-
+
+1.Open Visual studio code editor to run terraform script.
+
+2.Create access and secret access keys while working as root user
+
+Management console-Top-right corner-Security credentials-Create access key
+
+3.Create 4 ubuntu EC2 servers using terraform script.
+
+
+
+
+variable.tf file
+
+variable "ami" {
+type= string
+default="ami-053b12d3152c0cc71"
+}
+
+variable "instance_type" {
+type= list(string)
+default=["t2.micro","t2.nano","m5.large"]
+}
+
+
+
+
+main.tf file
+
+terraform {
+required_providers {
+aws = {
+source = "hashicorp/aws"
+version = "5.76.0"
+}
+}
+}
+
+#Provider configuration
+provider "aws" {
+region = "ap-south-1"
+access_key= "AKIAU6GDVZSJR4XFVEN2"
+secret_key= "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"
+}
+
+#Creating 4 ubuntu instances
+resource "aws_instance" "my-server" {
+count = 4
+ami = var.ami
+instance_type = var.instance_type[0]
+key_name = "devops-feb-2024"
+
+tags = {
+Name = "my-server"
+
+}
+}
+
+Run below commands on terraform terminal.
+
+$terraform init
+$terraform plan
+$terraform apply
+
+*4 EC2 servers created successfully.
+
+*Configuring instances-
+
+Add SSH rule under inbound security group rules and select CIDR as Anywhere IPV4 (0.0.0.0/0) to allow all public traffic.
+
+*Installing Jenkins in Jenkins-master server-
+
+Connect to Jenkins-master server
+Commands-
+sudo su -
+apt update -y
+apt install fontconfig openjdk-17-jre -y #Installing Java
+
+java  -version
+sudo wget -O /usr/share/keyrings/jenkins-keyring.asc \
+https://pkg.jenkins.io/debian-stable/jenkins.io-2023.key
+
+echo "deb [signed-by=/usr/share/keyrings/jenkins-keyring.asc]" \
+  https://pkg.jenkins.io/debian-stable binary/ | sudo tee \
+  /etc/apt/sources.list.d/jenkins.list > /dev/null
+
+
+sudo apt-get update -y
+sudo apt-get install jenkins -y
+
+*Accessing Jenkins-Add port 8080 under inbound security group rules  
+
+*Installing Ansible in Jenkins-server-
+
+*Steps-
+
+1.Install ansible in Jenkins-master server
+
+*Commands-
+
+python3 --version
+sudo apt install software-properties-common -y
+sudo add-apt-repository --yes --update ppa:ansible/ansible
+apt install ansible -y
+ansible --version
+
+*Ansible installed successfully.
+
+*Adding remaining 3 servers as hosts in Jenkins-master-
+
+*Commands-
+
+cd /etc/ansible/
+vi hosts
+Press i to edit
+host1 ansible_ssh_host = 43.204.237.25
+host2 ansible_ssh_host = 65.2.123.141
+host3 ansible_ssh_host = 13.235.79.109
+
+*Press esc and :wq  then enter to save and exit.
+
+*Establishing connection between Jenkins-master and 3 hosts-
+
+*Generating key in Jenkins-master-
+
+*Commands-
+
+exit
+sudo su -
+cd .ssh
+ssh-keygen
+ls -l
+cat the public key obtained.
+
+The key is- ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIHdZmScyVwM9Sa5iwfgxxjT8IaczO96O/AUdgfEUoqgu root@ip-172-31-9-123
+
+2.Connect to all the 3 hosts one by one.
+
+*Commands-
+
+sudo su -
+apt update -y
+cd .ssh
+vi authorized_keys
+Press i to edit
+Paste the public key obtained. (esc, then :wq and then enter)
+
+*Checking whether connection is established or not-
+
+Command-
+ansible host1 -m ping
+ansible host2 -m ping
+ansible host3 -m ping
+
+*Hosts got successfully connected to Jenkins-master
+
+*Installing Softwares on hosts using ansible (Creating playbook)-
+
+Commands-
+vi my-playbook.yaml
+
+---
+- name: Play1
+hosts: host1
+become: yes
+tasks:
+- name: Install Docker
+apt:
+name: docker.io
+state: latest
+- name: Install Java
+apt:
+name: openjdk-17-jre
+state: latest
+
+
+
+- name: Play2
+hosts: host2
+become: yes
+tasks:
+- name: Install Docker
+apt:
+name: docker.io
+state: latest
+
+
+- name: Play3
+hosts: host3
+become: yes
+tasks:
+- name: Install Docker
+apt:
+name: docker.io
+state: latest
+
+
+Commands-
+
+ansible-playbook my-playbook.yaml --syntax-check
+ansible-playbook my-playbook.yaml
+
+
+*Kubernetes-
+
+*Installing awscli on all hosts-
+
+Commands (on all hosts one by one)-
+
+apt install curl unzip -y
+curl "https://awscli.amazonaws.com/awscli-exe-linux-x86_64.zip" -o "awscliv2.zip"
+
+unzip awscliv2.zip
+sudo ./aws/install
+aws --version
+
+
+aws configure
+Provide the access and secret access keys
+
+
+*Installing kubectl cli-
+curl -LO "https://dl.k8s.io/release/$(curl -L -s https://dl.k8s.io/release/stable.txt)/bin/linux/amd64/kubectl"
+sudo install -o root -g root -m 0755 kubectl /usr/local/bin/kubectl
+kubectl version --client
+
+
+*Installing eksctl cli-
+
+
+
+curl -sLO "https://github.com/eksctl-io/eksctl/releases/latest/download/eksctl_$PLATFORM.tar.gz"
+curl -sL "https://github.com/eksctl-io/eksctl/releases/latest/download/eksctl_checksums.txt" | grep $PLATFORM | sha256sum --check
+tar -xzf eksctl_$PLATFORM.tar.gz -C /tmp && rm eksctl_$PLATFORM.tar.gz
+sudo mv /tmp/eksctl /usr/local/bin
+eksctl version
+
+
+*Creating EKS cluster-
+
+eksctl create cluster  --name=eksdemo1
+
+*Deploying YAML file-
+
+apiVersion: apps/v1
+kind: Service
+metadata:
+name: np-service
+spec:
+type: NodePort
+ports:
+-port: 30008
+selector:
+app: website
+---
+
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+name: website-deployment
+spec:
+replicas: 2
+template:
+metadata:
+labels:
+app: website
+
+
+*Deploying YAML file-
+
+  $kubectl apply -f deployment.yaml
+
+
+
+
+*Jenkins-
+
+*Creating Jenkins job-
+
+Dashboard-New item-Pipeline
+Provide name as Jenkins-pipeline-OK
+Provide script as below-
+
+
+pipeline {
+agent any
+
+environment {
+IMAGE_NAME = 'intellipaat-webpage'
+CONTAINER_NAME = 'intellipaat-container'
+DOCKERFILE_PATH = 'Dockerfile'
+HTML_FILE = 'index.html'
+
+}
+
+stages {
+stage('Checkout Code') {
+steps {
+// Checkout your code from GitHub or use a predefined directory for HTML and images
+git 'https://github.com/Daniyal1Hazari/website.git' // Adjust this with your GitHub URL
+}
+}
+
+stage('Create HTML File') {
+steps {
+script {
+
+def htmlContent = '''
+<html>
+<head>
+<title> Intellipaat </title>
+</head>
+<body style="background-image:url('images/github3.jpg'); background-size: 100%">
+<h2 ALIGN=CENTER>Hello world!</h2>
+</body>
+</html>
+'''
+
+
+}
+}
+}
+
+stage('Create Dockerfile') {
+steps {
+script {
+
+def dockerfileContent = '''
+
+FROM nginx:latest
+
+
+COPY ${index.html} /usr/share/nginx/html/index.html
+COPY ./images/github3.jpg /usr/share/nginx/html/images/github3.jpg
+
+# Expose port 80 for web access
+EXPOSE 80
+
+# Start the Nginx server
+CMD ["nginx", "-g", "daemon off;"]
+'''
+
+
+writeFile file: DOCKERFILE_PATH, text: dockerfileContent
+echo 'Dockerfile created.'
+}
+}
+}
+
+stage('Build Docker Image') {
+steps {
+script {
+
+sh 'docker build -t ${index.html} .'
+}
+}
+}
+
+stage('Run Docker Container') {
+steps {
+script {
+
+sh 'docker run -itd -p 82:80 --name ${intellipaat-container} ${intellipaat-webpage}'
+}
+}
+}
+
+
+}
+
+Apply-Save
+
+
+*Adding webhook-
+
+GitHub repo-settings-webhooks-Add webhook
+
+
+*Committing changes to above repo-
+
+Add another file (index1.html) with some content
+Commit changes directly to master branch.
+
+*Pipeline got automatically triggered.
